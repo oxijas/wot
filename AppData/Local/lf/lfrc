@@ -1,0 +1,459 @@
+#!/bin/sh
+
+# jga lf config file
+%[ $LF_LEVEL -eq 1 ] || echo "Warning: You're in a nested lf instance!"
+
+# basic settings ========================
+
+# shell hardcoded omdat dat snelste is
+#set shell sh
+#set shellopts '-eu'
+#aanpassingen voor zsh shell met spaties
+#set shell zsh
+#set shellopts '-euy'
+
+#voor powershell uitgezet
+#set shell bash
+set shell powershell
+
+#ifs=internal field separator - shell parameter
+set ifs "\n"
+#filesep voor fs en fx
+set filesep "\n"	# default already
+set scrolloff 3
+set hidden true
+set ignorecase true
+set dirfirst true
+set info size:time
+set ratios 1:3:4
+set preview true
+set cleaner ~/.config/lf/cleaner
+set previewer ~/.config/lf/preview
+set icons true
+
+# f = current file
+# fs = selected file(s)
+# fx = selected file(s), if none then current
+
+# :  read (default)	builtin/custom command
+# $  shell				shell command
+# %  shell-pipe		shell command running with the ui
+# !  shell-wait		shell command waiting for key press
+# &  shell-async		shell command running asynchronously
+
+# set -f = disable file name extension dus als ? of * of [ is found dan niet expanden met alles wat matched
+
+# % = regel onder aan scherm, alleen laatst geprinte regel zichtbaar
+# $ = aparte window openen
+
+cmd mkdiir %{{ printf "Directory Name: "; read ans; mkdir $ans; lf -remote 'send reload' }}
+cmd mkfile %{{ printf "File Name: " ; read ans ; touch $ans; lf -remote 'send reload' }}
+
+cmd chmod_bits %{{
+  printf "Mode Bits: "
+  read ans
+  for file in ${fx}
+  do
+	 chmod $ans $file
+  done
+  lf -remote 'send reload'
+}}
+
+#lf -remote 'send unselect'
+cmd chmod_toggle_x %{{
+  for FILE in ${fx}
+  do
+	 if [[ -x "$FILE" ]]
+	 then
+		chmod -x $FILE
+	 else
+		chmod +x $FILE
+	 fi
+  done
+  lf -remote 'send reload'
+}}
+
+cmd mkhardlink %{{
+  for file in ${fx}
+  do
+	 ln $file $file.ln
+  done
+  unset file
+}}
+
+cmd mksoftlink %{{
+  for file in ${fx}
+  do
+	 ln -s $file $file.ln
+  done
+  unset file
+}}
+
+cmd fasd_dir ${{
+	res="$(fasd -dl | grep -iv cache | fzf 2>/dev/tty | sed 's/\\/\\\\/g;s/"/\\"/g')"
+	if [ -d "$res" ]; then
+		cmd="cd"
+	else
+		cmd="select"
+	fi
+ lf -remote "send $id $cmd \"$res\""
+ }}
+
+cmd open ${{
+	 test -L $f && f=$(readlink -f $f)
+	 case $(file --mime-type $f -b) in
+		  text/*) $EDITOR $fx;;
+		  *) for f in $fx; do setsid $OPENER $f > /dev/null 2> /dev/null & done;;
+	 esac
+}}
+
+cmd delete_files ${{
+	# Linux commands
+	#  set -f
+	#  clear
+	#  printf "$fx\n\n"
+	#  printf "delete?[y/N]: "
+	#  read ans
+	#  [ $ans = "y" ] && rm -rf $fx
+	
+	# Windows powershell equivalent
+	Echo %fs%
+	$YN = Read-Host "Delete [y/N]?"
+
+	if ( "Y" -eq $YN )
+	{
+		Remove-Item -Path %f%
+	}
+
+}}
+
+# extract the current file with the right command
+# (xkcd link: https://xkcd.com/1168/)
+cmd extract %{{
+	if [ -f $f ]; then
+	 	case $f in
+		*.tar.bz|*.tar.bz2|*.tbz|*.tbz2) tar xjvf $f;;
+		*.tar.gz|*.tgz) tar xzvf $f;;
+		*.tar.xz|*.txz) tar xJvf $f;;
+		*.zip) unzip $f;;
+		*.rar) unrar x $f;;
+		*.7z) 7z x $f;;
+		*.gz) gunzip $f;;
+		*) printf "not a valid archive";;
+		esac
+	else
+		echo "Not a regular file"
+	fi
+}}
+
+# ${variable#pattern}  Trim the shortest match from the beginning
+# ${variable##pattern} Trim the longest match from the beginning
+# ${variable%pattern}  Trim the shortest match from the end
+# ${variable%%pattern} Trim the longest match from the end
+# # = start from beginning
+# % = start from end
+
+cmd extract_todir %{{
+	if [ -f $f ]; then
+		fname=${f##*/}
+		dirname=${fname%%.*}
+		mkdir -p $dirname
+		cp $f $dirname/
+		cd $dirname
+		case $f in
+	   *.tar.bz|*.tar.bz2|*.tbz|*.tbz2) tar xjvf $f;;
+	   *.tar.gz|*.tgz) tar xzvf $f;;
+	   *.tar.xz|*.txz) tar xJvf $f;;
+	   *.zip) unzip $f;;
+	   *.rar) unrar x $f;;
+	   *.7z) 7z x $f;;
+	   *.gz) gunzip $f;;
+		*) printf "$fname is not a valid archive";;
+		esac
+		rm -f $fname
+		cd -
+	else
+		echo "Not a regular file"
+	fi
+}}
+
+# works with subdirs
+cmd create_tar_gz %{{
+	printf "tar.gz filename : "
+	read -r ans
+	local fnames=$(realpath --relative-to=$PWD  $fx)
+	#-C needs to be set before the files to be added to the archive
+	tar -czf $ans.tar.gz -C $PWD $fnames
+	printf "delete sourcefiles [y/N]: "
+	read ans
+	[ $ans = "y" ] && rm -rf $fx
+	lf -remote 'send reload'
+}}
+
+cmd open_config  ${{
+  $EDITOR $(bookmenu -b ~/.config/bookmenu/configs -f fzf -o)
+}}
+
+cmd dotfiles_log ${{
+	clear
+	dot log --graph --all --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%ci) %C(bold blue)<%an>%Creset' --abbrev-commit
+}}
+
+cmd dotfiles_status !{{
+	clear
+	# je kan niet dots gebruiken want aliases niet defined inside lf
+	dot status -s -b
+	echo ""
+}}
+
+cmd dotfiles_clearindex !{{
+	clear
+	dot status -s -b
+	printf "Remove these from the index? [y/N]: "
+	read ans
+	if [ "$ans" = "y" ]; then
+		dot reset
+		printf "\nNieuwe status\n"
+		dot status -s -b
+		echo ""
+  fi
+}}
+
+cmd dotfiles_update !{{
+	clear
+	dot add -u
+	printf "New status:\n"
+	dot status -s
+	echo ""
+}}
+
+cmd dotfiles_add !{{
+	set -f
+	clear
+	printf "$fx\n"
+	printf "\n"
+	printf "These files are added, ok? [y/N]: "
+	read ans
+	if [ "$ans" = "y" ]; then
+		dot add $fx
+		dot status -s
+		echo ""
+	fi
+}}
+
+cmd dotfiles_commit !{{
+	set -f
+	clear
+	dot status
+	printf "These files will be committed, continue? [y/N]: "
+	read ans
+	if [ "$ans" = "y" ]; then
+		dot commit
+		dot status -s
+		echo ""
+	fi
+}}
+
+cmd dotfiles_push !{{
+	set -f
+	clear
+	printf "Push dotfiles?[y/N]: "
+	read ans
+	if [ "$ans" = "y" ]; then
+		dot push
+	fi
+}}
+
+cmd dotfiles_amend ${{
+	set -f
+	clear
+	printf "Amend last commit?[y/N]: "
+	read ans
+	if [ "$ans" = "y" ]; then
+		dot commit --amend
+	fi
+}}
+
+
+cmd git_log !{{
+	clear
+	git log --graph --all --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%ci) %C(bold blue)<%an>%Creset' --abbrev-commit
+	# git log --oneline --graph
+}}
+
+cmd git_add !{{
+	set -f
+	clear
+	printf "$fx\n"
+	printf "\n"
+	printf "These files are added, ok? [y/N]: "
+	read ans
+	if [ "$ans" = "y" ]; then
+		git add $fx
+		git status -s
+		echo ""
+	fi
+}}
+
+cmd git_update !{{
+	clear
+	git add -u
+	printf "New status:\n"
+	git status -s
+	echo ""
+}}
+
+
+
+cmd git_clearindex !{{
+	clear
+	git status -s
+	printf "Clear the index? [y/N]: "
+	read ans
+	if [ "$ans" = "y" ]; then
+		git reset
+		printf "\nNew status after removal:\n"
+		git status -s
+		echo ""
+  fi
+}}
+
+cmd git_status !{{
+	clear
+	git status -b -s
+	echo ""
+}}
+
+cmd git_commit ${{
+	set -f
+	clear
+	git status
+	printf "These files will be committed, continue? [y/N]: "
+	read ans
+	if [ "$ans" = "y" ]; then
+		git commit
+		printf "\nNew status after commit:\n"
+		git status -b -s;
+		echo ""
+  fi
+}}
+
+cmd git_push !{{
+	set -f
+	clear
+	printf "Push git?[y/n] :"
+	read ans
+	if [ "$ans" = "y" ]; then
+		git push
+	fi
+}}
+
+cmd bulkrename $vidir $fx
+
+cmd bulk_rename ${{
+	 old="$(mktemp)"
+	 new="$(mktemp)"
+	 [ -n "$fs" ] && fs="$(ls)"
+	 printf '%s\n' "$fs" >"$old"
+	 printf '%s\n' "$fs" >"$new"
+	 $EDITOR "$new"
+	 [ "$(wc -l "$new")" -ne "$(wc -l "$old")" ] && exit
+	 paste "$old" "$new" | while IFS= read -r names; do
+		  src="$(printf '%s' "$names" | cut -f1)"
+		  dst="$(printf '%s' "$names" | cut -f2)"
+		  if [ "$src" = "$dst" ] || [ -e "$dst" ]; then
+				continue
+		  fi
+		  mv -- "$src" "$dst"
+	 done
+	 rm -- "$old" "$new"
+	 lf -remote "send $id unselect"
+}}
+
+cmd refresh %{{
+	lf -remote 'send reload'
+}}
+
+cmd gitdiff !{{
+	clear
+	git diff
+}}
+
+cmd batdiff !{{
+	clear
+	bat -d $f
+}}
+
+cmd teehee_hexedit ${{
+	teehee $f
+}}
+
+# Bindings=======================================
+# Remove some defaults
+map "'"
+map '"'
+
+# new mappings ==================================
+#map <enter> shell-wait
+map <c-j> !$f
+map . set hidden!
+map x cut
+
+# archive commands
+map a
+map ac create_tar_gz
+map ad extract_todir
+map ae extract
+map b open_config
+
+map d
+map dd delete_files
+map dl dotfiles_log
+map ds dotfiles_status
+map da dotfiles_add
+map dc dotfiles_commit
+map dC dotfiles_amend
+map dr dotfiles_clearindex
+map dp dotfiles_push
+map du dotfiles_update
+map dq refresh
+
+#map g - niet leegmaken, behoud gg(top) en gh(home)
+map gb cd /usr/bin
+map g. cd ~/.config
+map ge cd /etc
+map gw cd /mnt/c/Users/jvdga
+#ook met g maar nu git commands
+map gc git_commit
+map gd batdiff
+map gi gitdiff
+map gl git_log
+map gs git_status
+map ga git_add
+map gp git_push
+map gt cd /mnt/c/Users/jvdga/Documents/Ninjatrader\ 8/bin/Custom/Indicators/Timo
+map gr git_clearindex
+map gu git_update
+
+
+map H top
+map L bottom
+map J half-down
+map <a-j> half-down
+map K half-up
+map <a-k> half-up
+map R bulkrename
+
+# make file commands
+map m
+map md mkdiir
+map mf mkfile
+map mh mkhardlink
+map ms mksoftlink
+map mb chmod_bits
+map mx chmod_toggle_x
+
+map o open
+map t teehee_hexedit
+
+map r push :rename<enter><home>

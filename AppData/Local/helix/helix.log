@@ -1,0 +1,7 @@
+2023-12-03T11:58:21.098 helix_view::editor [ERROR] Failed to initialize the language servers for `source.toml` - `taplo` { cannot find binary path }
+2023-12-03T11:59:39.355 helix_view::editor [ERROR] editor error: wrong argument count
+2023-12-04T10:26:50.349 helix_view::editor [ERROR] Failed to initialize the language servers for `source.toml` - `taplo` { cannot find binary path }
+2023-12-04T10:27:19.804 helix_view::editor [ERROR] editor error: 1 unsaved buffer(s) remaining: ["[scratch]"]
+2023-12-04T10:28:43.164 helix_view::editor [ERROR] Failed to initialize the language servers for `source.toml` - `taplo` { cannot find binary path }
+2023-12-04T10:29:06.401 helix_view::editor [ERROR] editor error: 1 unsaved buffer(s) remaining: ["[scratch]"]
+2023-12-05T19:25:44.196 helix_view::editor [ERROR] Failed to initialize the language servers for `source.toml` - `taplo` { cannot find binary path }
