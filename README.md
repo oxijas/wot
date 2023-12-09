@@ -1,0 +1,2 @@
+# wot
+Windows Powershell Dot
